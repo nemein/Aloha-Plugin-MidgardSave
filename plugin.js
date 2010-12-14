@@ -67,6 +67,7 @@ midgardproject.SavePlugin.enableEditable = function(objectContainer) {
     var editableObject = {};
     editableObject.identifier = objectContainer.attr('about');
     editableObject.type = objectContainer.attr('typeof');
+    editableObject.container = objectContainer;
 
     // Seek editable properties
     editableObject.properties = {};
@@ -88,6 +89,9 @@ midgardproject.SavePlugin.enableEditable = function(objectContainer) {
 };
 
 midgardproject.SavePlugin.enableEditables = function() {
+
+    midgardproject.ContainersPlugin.find();
+
     var objectContainers = jQuery('[typeof]');
     jQuery.each(objectContainers, function(index, objectContainer)
     {
@@ -146,8 +150,9 @@ midgardproject.SavePlugin.save = function () {
             success: function (response) {
                 jQuery.each(editableObject.properties, function(index, editableProperty) {
                     editableProperty.aloha.setUnmodified();
+                    editableObject.identifier = response.status.identifier;
+                    editableObject.container.attr('about', response.status.identifier);
                 });
-                console.log(response);
             },
             error: function (xhr, ajaxOptions, thrownError) {
                 try
