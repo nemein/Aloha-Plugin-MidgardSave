@@ -16,12 +16,12 @@ midgardproject.SavePlugin = new GENTICS.Aloha.Plugin('org.midgardproject.aloha.p
 /**
  * Configure the available languages
  */
-midgardproject.SavePlugin.languages = ['en'];
+midgardproject.SavePlugin.languages = ['en','fi'];
 
 /**
  * Holder for Midgard objects (array indexed by GUID) that have been made editable on the page
  */
-midgardproject.SavePlugin.objects = {};
+midgardproject.SavePlugin.objects = [];
 
 midgardproject.SavePlugin.enablerButton = {};
 midgardproject.SavePlugin.disablerButton = {};
@@ -55,7 +55,6 @@ midgardproject.SavePlugin.init = function () {
             that.disableEditables();
         }
     });
-    midgardproject.SavePlugin.disablerButton.hide();
         
     // add buttons to ribbon
     GENTICS.Aloha.Ribbon.addButton(midgardproject.SavePlugin.enablerButton);
@@ -63,55 +62,51 @@ midgardproject.SavePlugin.init = function () {
     GENTICS.Aloha.Ribbon.addButton(saveButton);
 };
 
-midgardproject.SavePlugin.enableEditables = function() {
-    var objectcontainers = jQuery('[typeof]');
-    jQuery.each(objectcontainers, function(index, objectinstance)
+midgardproject.SavePlugin.enableEditable = function(objectContainer) {
+
+    var editableObject = {};
+    editableObject.identifier = objectContainer.attr('about');
+    editableObject.type = objectContainer.attr('typeof');
+
+    // Seek editable properties
+    editableObject.properties = {};
+    var objectProperties = jQuery('*', objectContainer).filter(function() {
+        return jQuery(this).attr('property'); 
+    });
+    jQuery.each(objectProperties, function(index, objectProperty)
     {
-        var objectinstance = jQuery(objectinstance);
-        var children = jQuery('*', objectinstance).filter(function() {
-            return jQuery(this).attr('property'); 
-        });
-        var guid = objectinstance.attr('about');
-        if (!guid)
-        {
-            return true;
-        }
-        var type = objectinstance.attr('typeof');
-        console.log(type + " " + guid);
-        
-        if (typeof midgardproject.SavePlugin.objects[guid] == "undefined") {
-            midgardproject.SavePlugin.objects[guid] = {};
-        }
-
-        midgardproject.SavePlugin.objects[guid].type = type;
-        midgardproject.SavePlugin.objects[guid].element = objectinstance;
-        midgardproject.SavePlugin.objects[guid].properties = {};
-
-        jQuery.each(children, function(index, childInstance)
-        {
-            var childInstance = jQuery(childInstance);
-            var propertyName = childInstance.attr('property');
-            midgardproject.SavePlugin.objects[guid].properties[propertyName] = {
-                element: childInstance,
-                aloha: new GENTICS.Aloha.Editable(childInstance)
-            };
-            childInstance.MIDGARDMVC_UI_CREATE_GUID = guid;
-        });
+        var objectProperty = jQuery(objectProperty);
+        var propertyName = objectProperty.attr('property');
+        editableObject.properties[propertyName] = {
+            
+            element: objectProperty,
+            aloha: new GENTICS.Aloha.Editable(objectProperty)
+        };
     });
 
-    midgardproject.SavePlugin.enablerButton.hide();
-    midgardproject.SavePlugin.disablerButton.show();
+    midgardproject.SavePlugin.objects[midgardproject.SavePlugin.objects.length] = editableObject;
+};
+
+midgardproject.SavePlugin.enableEditables = function() {
+    var objectContainers = jQuery('[typeof]');
+    jQuery.each(objectContainers, function(index, objectContainer)
+    {
+        var objectContainer = jQuery(objectContainer);
+        if (typeof objectContainer.attr('about') == 'undefined') {
+            // No identifier set, therefore not editable
+            return true;
+        }
+        midgardproject.SavePlugin.enableEditable(objectContainer);
+    });
 };
 
 midgardproject.SavePlugin.disableEditables = function() {
-    jQuery.each(midgardproject.SavePlugin.objects, function(index, midgardObject) {
-        jQuery.each(midgardObject.properties, function(index, editableObject) {
-            editableObject.aloha.destroy();
+    jQuery.each(midgardproject.SavePlugin.objects, function(index, editableObject) {
+        jQuery.each(editableObject.properties, function(propertyName, editableProperty) {
+            editableProperty.element.mahalo();
         });
     });
-    midgardproject.SavePlugin.objects = {};
-    midgardproject.SavePlugin.disablerButton.hide();
-    midgardproject.SavePlugin.enablerButton.show();
+    midgardproject.SavePlugin.objects = [];
 };
 
 /**
@@ -120,49 +115,52 @@ midgardproject.SavePlugin.disableEditables = function() {
 midgardproject.SavePlugin.save = function () {
 
     // iterate all Midgard objects which have been made Aloha editable
-    jQuery.each(midgardproject.SavePlugin.objects, function(index, midgardObject) {
-        var guid = index;
-        var schematype = midgardObject.type;
-        var propertyContents = {
-            type: schematype,
-            identifier: guid,
+    jQuery.each(midgardproject.SavePlugin.objects, function(objectIndex, editableObject) {
+
+        var saveObject = {
+            type: editableObject.type,
+            identifier: editableObject.identifier,
         };
+
         var objectModified = false;
-        jQuery.each(midgardObject.properties, function(index, editableObject) {
-            if (editableObject.aloha.isModified())
+        jQuery.each(editableObject.properties, function(index, editableProperty) {
+            if (editableProperty.aloha.isModified())
             {
-                propertyContents[index] = editableObject.aloha.getContents();
+                saveObject[index] = editableProperty.aloha.getContents();
                 objectModified = true;
             }
         });
 
-        if (objectModified)
+        if (!objectModified)
         {
-            // Send the edited fields to the form handler backend
-            var url = '/mgd:create/save/json';
-            jQuery.ajax({
-                url: url,
-                dataType: 'json',
-                data: propertyContents,
-                type: 'POST',
-                success: function (response) {
-                    jQuery.each(midgardObject.properties, function(index, editableObject) {
-                        editableObject.aloha.setUnmodified();
-                    });
-                },
-                error: function (xhr, ajaxOptions, thrownError) {
-                    try
-                    {
-                        response = jQuery.parseJSON(xhr.responseText);
-                        message = response.status.message;
-                    }
-                    catch (e)
-                    {
-                        message = xhr.statusText;
-                    }
-                    GENTICS.Aloha.Log.error("Midgard saving plugin", message);
-                },
-            });
+            return true;
         }
+
+        // Send the edited fields to the form handler backend
+        var url = '/mgd:create/save/json';
+        jQuery.ajax({
+            url: url,
+            dataType: 'json',
+            data: saveObject,
+            type: 'POST',
+            success: function (response) {
+                jQuery.each(editableObject.properties, function(index, editableProperty) {
+                    editableProperty.aloha.setUnmodified();
+                });
+                console.log(response);
+            },
+            error: function (xhr, ajaxOptions, thrownError) {
+                try
+                {
+                    response = jQuery.parseJSON(xhr.responseText);
+                    message = response.status.message;
+                }
+                catch (e)
+                {
+                    message = xhr.statusText;
+                }
+                GENTICS.Aloha.Log.error("Midgard saving plugin", message);
+            },
+        });
     });
 } ;
