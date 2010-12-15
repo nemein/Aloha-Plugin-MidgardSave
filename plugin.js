@@ -60,6 +60,15 @@ midgardproject.SavePlugin.init = function () {
     GENTICS.Aloha.Ribbon.addButton(midgardproject.SavePlugin.enablerButton);
     GENTICS.Aloha.Ribbon.addButton(midgardproject.SavePlugin.disablerButton);
     GENTICS.Aloha.Ribbon.addButton(saveButton);
+
+    if (Modernizr.sessionstorage) {
+        // Check if user is in editing state
+        var editorState = sessionStorage.getItem('midgardmvc_ui_create_state');
+        if (editorState == 'edit')
+        {
+            midgardproject.SavePlugin.enableEditables();
+        }
+    }
 };
 
 midgardproject.SavePlugin.enableEditable = function(objectContainer) {
@@ -103,9 +112,19 @@ midgardproject.SavePlugin.enableEditables = function() {
         }
         midgardproject.SavePlugin.enableEditable(objectContainer);
     });
+
+    if (Modernizr.sessionstorage) {
+        // Set session to editing state
+        sessionStorage.setItem('midgardmvc_ui_create_state', 'edit');
+    }
 };
 
 midgardproject.SavePlugin.disableEditables = function() {
+    if (Modernizr.sessionstorage) {
+        // Remove editing state
+        sessionStorage.removeItem('midgardmvc_ui_create_state');
+    }
+
     jQuery.each(midgardproject.SavePlugin.objects, function(index, editableObject) {
         jQuery.each(editableObject.properties, function(propertyName, editableProperty) {
             editableProperty = jQuery(editableProperty.element);
